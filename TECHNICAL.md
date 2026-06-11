@@ -117,11 +117,11 @@ The server is a Node.js 20 ES module running Express 4. It exposes one functiona
 
 Every `POST /api/agent` request passes through four layers in sequence. A request rejected at any layer returns immediately — no agent logic is reached, no Anthropic call is made. A request rejected at any layer does not proceed further and no agent logic is reached.
 
-**Helmet** sets twelve HTTP security headers on every response:
+**Helmet** sets twelve HTTP security headers on every response. Specifically, the Content-Security-Policy is customized to match the implementation in `server.js`:
 
 | Header | Value | Purpose |
 |---|---|---|
-| `Content-Security-Policy` | `default-src 'self'; connect-src 'self'` | Blocks the browser from fetching any external resource or contacting any origin other than the local server — prevents XSS-based key exfiltration |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'` | Explicitly locks down content loading, only permitting local scripts and specifically allowing inline styles and data images for the map and dashboard, completely preventing XSS-based key exfiltration. |
 | `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` | Forces HTTPS in production environments |
 | `X-Frame-Options` | `DENY` | Prevents the dashboard from being loaded inside an iframe — blocks clickjacking attacks |
 | `X-Content-Type-Options` | `nosniff` | Prevents the browser from MIME-sniffing responses away from the declared content type |
@@ -246,15 +246,6 @@ Link's final output is a confidence-rated attribution, an ordered list of the mo
 
 
 ---
-
-## Conclusion
-
-AURIS demonstrates that a production-viable OSINT intelligence platform can be built without sacrificing security for simplicity. The proxy architecture — where the browser communicates only with a local server that handles all Anthropic API calls — is the correct pattern for any web application that must keep credentials out of the client. The layered security middleware stack addresses the most common web application attack vectors: CSRF, XSS via CSP, rate abuse, input injection, and information leakage through error messages.
-
-The five-agent design reflects a real OSINT investigative workflow. Professional analysts do not run a single tool against a target — they work in layers, starting broad and narrowing toward attribution. AURIS encodes that methodology into its agent ordering: Scout and Trace establish the factual landscape, Watch and Dig identify risk indicators and data exposure, and Link synthesises attribution across all four. The intelligence picture that emerges from the full chain is richer than any individual agent could produce, and the design ensures Link always has the complete context it needs to draw meaningful conclusions.
-
-The frontend's intentional minimalism — no frameworks, no build tools, no CDN dependencies — makes the codebase auditable, portable, and straightforward to extend. Adding a new agent requires one array entry in `server.js` and one tab in the dashboard HTML. The fixed JSON schema across all agents means the frontend never needs to change to accommodate new intelligence types or agent capabilities.
-
 ---
 
 ## Appendix: Dependencies & Configuration
@@ -283,8 +274,12 @@ It is loaded at server startup via the `--env-file=.env` Node.js flag, populatin
 
 The server validates the key's presence on startup and exits with `process.exit(1)` if it is absent, preventing a misconfigured server from starting silently and failing on every agent call.
 
-AURIS demonstrates that a production-viable OSINT intelligence platform can be built without sacrificing security for simplicity. The proxy architecture — where the browser communicates only with a local server that handles all Anthropic API calls — is the correct pattern for any web application that must keep credentials out of the client. The layered security middleware stack addresses the most common web application attack vectors: CSRF, XSS via CSP, rate abuse, input injection, and information leakage through error messages.
+---
 
-The five-agent design reflects a real OSINT investigative workflow. Professional analysts do not run a single tool against a target — they work in layers, starting broad and narrowing toward attribution. AURIS encodes that methodology into its agent ordering: Scout and Trace establish the factual landscape, Watch and Dig identify risk indicators and data exposure, and Link synthesises attribution across all four. The intelligence picture that emerges from the full chain is richer than any individual agent could produce, and the design ensures Link always has the complete context it needs to draw meaningful conclusions.
+## Conclusion
 
-The frontend's intentional minimalism — no frameworks, no build tools, no CDN dependencies — makes the codebase auditable, portable, and straightforward to extend. Adding a new agent is one array entry in `server.js` and one tab in the dashboard HTML. The fixed JSON schema across all agents means the frontend never needs to change to accommodate new intelligence types or agent capabilities.
+AURIS successfully demonstrates that a highly sophisticated, multi-agent OSINT intelligence platform can be deployed natively while strictly isolating critical secrets. The core design principle—acting as a secure local proxy between a completely unprivileged browser dashboard and the Anthropic API—ensures that sensitive credentials never leave the host server. The security implementation detailed in this document is robust, aligning exactly with the `server.js` code via a heavily customized Helmet Content-Security-Policy, 60-request rate limiting, timing-safe double-submit CSRF tokens, and zero-trust input validation using a strict whitelist.
+
+The autonomous five-agent workflow (Scout, Trace, Watch, Dig, and Link) mirrors the methodical approach of professional intelligence analysts. By gathering raw surface data, mapping infrastructure, querying threat intelligence, identifying data breaches, and finally synthesizing these elements into a coherent threat picture, AURIS automates complex analytical processes in real-time.
+
+Ultimately, AURIS is engineered for both security and simplicity. Its zero-dependency vanilla frontend and minimal Express backend make it easy to audit, deploy, and extend. By standardizing the JSON output schema across all agents, AURIS ensures the dashboard remains instantly reactive to new capabilities without structural changes. This architectural choice makes it an effective, reliable tool for open-source intelligence gathering.
